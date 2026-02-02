@@ -30,7 +30,7 @@ import {
   onAuthStateChanged, 
   signInWithCustomToken, 
   signInAnonymously,
-  User 
+  type User 
 } from 'firebase/auth';
 import { 
   getFirestore, 
@@ -42,9 +42,9 @@ import {
   onSnapshot, 
   query,
   setDoc,
-  QuerySnapshot,
-  DocumentSnapshot,
-  QueryDocumentSnapshot
+  type QuerySnapshot,
+  type DocumentSnapshot,
+  type QueryDocumentSnapshot
 } from 'firebase/firestore';
 
 // --- TYPES & INTERFACES ---
