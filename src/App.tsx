@@ -19,9 +19,7 @@ import {
   Pencil, 
   AlertTriangle,
   CalendarRange,
-  Loader2,
-  CloudOff, 
-  Cloud     
+  Loader2
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
