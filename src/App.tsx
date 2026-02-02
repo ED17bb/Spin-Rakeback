@@ -24,7 +24,8 @@ import {
   Database,   
   HardDrive,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  LogIn
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -115,7 +116,7 @@ const YOUR_FIREBASE_CONFIG = {
     appId: "1:193768744384:web:4745748844d8d9117a5425"
   };
 
-// --- FIREBASE INITIALIZATION (SAFE MODE) ---
+// --- FIREBASE INITIALIZATION ---
 let auth: any = null;
 let db: any = null;
 let isFirebaseAvailable = false;
@@ -136,6 +137,7 @@ try {
     db = getFirestore(firebaseApp);
     // @ts-ignore
     const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'spin-tracker';
+    // Sanitización crítica: Reemplazar caracteres no permitidos en rutas de Firestore
     appId = rawAppId.replace(/[\/.]/g, '_');
     isFirebaseAvailable = true;
   }
@@ -463,7 +465,40 @@ function App() {
     // Handlers
     const openAddModal = () => { setFormData({ id: undefined, date: new Date().toISOString().split('T')[0], buyIn: 5, gamesCount: 0, pvi: userSettings.defaultPVI || 0.5, leaderboardPrize: 0, miningPrize: 0, notes: '' }); setManualTPInput(''); setIsSessionModalOpen(true); };
     const openEditModal = (session: Session) => { setFormData({ ...session }); setManualTPInput(''); setIsSessionModalOpen(true); };
-    const handleSaveSession = async (e: React.FormEvent) => { e.preventDefault(); if (isFirebaseAvailable && user && !user.isAnonymous) { try { if (formData.id) { await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', formData.id), { ...formData }); } else { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), { ...formData }); } } catch { alert("Error nube."); } } else { if (formData.id) { setSessions(sessions.map(s => s.id === formData.id ? { ...formData, id: formData.id } as Session : s)); } else { setSessions([{ ...formData, id: Date.now().toString() } as Session, ...sessions]); } } setIsSessionModalOpen(false); };
+    
+    // UPDATED SAVE HANDLER WITH BETTER ERROR REPORTING
+    const handleSaveSession = async (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        
+        // Determinar si debemos guardar en nube o local
+        // El usuario DEBE estar logueado y no ser anónimo para usar la nube.
+        const shouldSaveToCloud = isFirebaseAvailable && user && !user.isAnonymous;
+
+        if (shouldSaveToCloud) { 
+            try { 
+                if (formData.id) { 
+                    const sessionRef = doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', formData.id);
+                    await updateDoc(sessionRef, { ...formData }); 
+                } else { 
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), { ...formData }); 
+                } 
+                setIsSessionModalOpen(false);
+            } catch (error: any) { 
+                console.error("Cloud Save Error:", error);
+                // Mostrar el error real al usuario
+                alert(`Error al guardar en la nube: ${error.message || error}`); 
+            } 
+        } else { 
+            // Local Save
+            if (formData.id) { 
+                setSessions(sessions.map(s => s.id === formData.id ? { ...formData, id: formData.id } as Session : s)); 
+            } else { 
+                setSessions([{ ...formData, id: Date.now().toString() } as Session, ...sessions]); 
+            } 
+            setIsSessionModalOpen(false);
+        } 
+    };
+
     const initiateDelete = (id: string | null) => { setSessionToDelete(id); setIsDeleteModalOpen(true); };
     const confirmDelete = async () => { if (sessionToDelete) { if (isFirebaseAvailable && user && !user.isAnonymous) { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', sessionToDelete)); } else { setSessions(sessions.filter(s => s.id !== sessionToDelete)); } setSessionToDelete(null); setIsDeleteModalOpen(false); } };
     const saveSettings = async () => { if (isFirebaseAvailable && user && !user.isAnonymous) { await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global'), userSettings, { merge: true }); } setIsSettingsModalOpen(false); };
