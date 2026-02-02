@@ -19,7 +19,16 @@ import {
   Pencil, 
   AlertTriangle,
   CalendarRange,
-  Loader2
+  Loader2,
+  CloudOff, 
+  Cloud,
+  Database,   
+  HardDrive,
+  LogOut,
+  User as UserIcon,
+  ShieldCheck,
+  ShieldAlert,
+  LogIn
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -30,6 +39,9 @@ import {
   onAuthStateChanged, 
   signInWithCustomToken, 
   signInAnonymously,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
   type User 
 } from 'firebase/auth';
 import { 
@@ -97,7 +109,7 @@ interface StakeData {
   rake: number;
 }
 
-// --- FIREBASE INITIALIZATION (SAFE MODE) ---
+// --- FIREBASE INITIALIZATION ---
 let auth: any = null;
 let db: any = null;
 let isFirebaseAvailable = false;
@@ -115,15 +127,12 @@ try {
     const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'spin-tracker';
     appId = rawAppId.replace(/[\/.]/g, '_');
     isFirebaseAvailable = true;
-  } else {
-    console.warn("⚠️ Firebase Config not found. Running in Offline/LocalStorage Mode.");
   }
 } catch (e) {
-  console.warn("⚠️ Firebase Init Failed. Running in Offline/LocalStorage Mode.", e);
-  isFirebaseAvailable = false;
+  console.warn("Firebase Init Failed:", e);
 }
 
-// --- ERROR BOUNDARY COMPONENT ---
+// --- ERROR BOUNDARY (Restored) ---
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
   constructor(props: any) {
     super(props);
@@ -239,15 +248,7 @@ const GEMS_BASE_PER_DOLLAR = 100;
 
 // --- COMPONENTS ---
 
-interface StatCardProps {
-  title: string;
-  value: string;
-  subtext: string;
-  icon: LucideIcon;
-  colorClass: string;
-}
-
-const StatCard: React.FC<StatCardProps> = ({ title, value, subtext, icon: Icon, colorClass }) => (
+const StatCard: React.FC<{ title: string; value: string; subtext: string; icon: LucideIcon; colorClass: string }> = ({ title, value, subtext, icon: Icon, colorClass }) => (
     <div className="bg-slate-800/70 backdrop-blur-md border border-white/5 p-4 rounded-xl flex items-start justify-between shadow-lg hover:bg-slate-800 transition-colors group">
         <div>
             <p className="text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1 group-hover:text-slate-300 transition-colors">{title}</p>
@@ -260,14 +261,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subtext, icon: Icon, 
     </div>
 );
 
-interface ModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}
-
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({ isOpen, onClose, title, children }) => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -286,11 +280,68 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
     );
 };
 
+// --- LOGIN PAGE COMPONENT ---
+const LoginPage: React.FC<{ onLogin: (type: 'google' | 'guest') => void, isCloudAvailable: boolean }> = ({ onLogin, isCloudAvailable }) => {
+    return (
+        <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 font-sans text-slate-200">
+            <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
+                <div className="flex flex-col items-center mb-10 text-center">
+                    <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-4 rounded-2xl shadow-lg shadow-cyan-500/20 mb-6">
+                        <Anchor className="text-slate-900" size={48} strokeWidth={2.5} />
+                    </div>
+                    <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">SpinTracker <span className="text-cyan-400">Ocean</span></h1>
+                    <p className="text-slate-400 text-sm">Gestiona tu rakeback, controla tu PVI y maximiza tus ganancias.</p>
+                </div>
+
+                <div className="space-y-4">
+                    <button 
+                        onClick={() => onLogin('google')}
+                        disabled={!isCloudAvailable}
+                        className={`w-full flex items-center justify-center gap-3 font-bold py-3.5 px-6 rounded-xl transition-all ${
+                            isCloudAvailable 
+                            ? 'bg-white text-slate-900 hover:bg-gray-100 shadow-lg shadow-white/5 hover:scale-[1.02]' 
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50'
+                        }`}
+                    >
+                        {isCloudAvailable ? (
+                            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+                        ) : (
+                            <CloudOff size={20} />
+                        )}
+                        {isCloudAvailable ? 'Entrar con Google' : 'Nube no disponible'}
+                    </button>
+
+                    <div className="relative flex items-center py-2">
+                        <div className="flex-grow border-t border-slate-700"></div>
+                        <span className="flex-shrink-0 mx-4 text-xs text-slate-500 uppercase font-semibold">O</span>
+                        <div className="flex-grow border-t border-slate-700"></div>
+                    </div>
+
+                    <button 
+                        onClick={() => onLogin('guest')}
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-3.5 px-6 rounded-xl flex items-center justify-center gap-3 transition-all hover:text-white border border-slate-700 hover:border-slate-600"
+                    >
+                        <UserIcon size={20} />
+                        Continuar como Invitado
+                    </button>
+                </div>
+
+                {!isCloudAvailable && (
+                    <p className="text-[10px] text-slate-500 text-center mt-6 bg-slate-950/50 p-3 rounded-lg border border-slate-800">
+                        Nota: La autenticación de Google requiere configuración en Vercel. 
+                        Tus datos se guardarán localmente en modo Invitado.
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // --- MAIN APP COMPONENT ---
 
 function App() {
     const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [authInitialized, setAuthInitialized] = useState(false);
     
     // State Data 
     const [sessions, setSessions] = useState<Session[]>([]);
@@ -325,54 +376,67 @@ function App() {
 
     // --- INITIALIZATION ---
     useEffect(() => {
-        const initialize = async () => {
+        if (isFirebaseAvailable) {
+            const unsubscribe = onAuthStateChanged(auth, (currentUser: User | null) => {
+                setUser(currentUser);
+                setAuthInitialized(true);
+            });
+            // En este entorno de vista previa, simular un usuario si hay token
+            // @ts-ignore
+            if (!auth.currentUser && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                 // @ts-ignore
+                 signInWithCustomToken(auth, __initial_auth_token);
+            }
+            return unsubscribe;
+        } else {
+            loadLocalData();
+            setAuthInitialized(true);
+        }
+    }, []);
+
+    const loadLocalData = () => {
+        const savedSessions = localStorage.getItem('spinTrackerSessions');
+        if (savedSessions) setSessions(JSON.parse(savedSessions));
+        
+        const savedSettings = localStorage.getItem('spinTrackerSettings');
+        if (savedSettings) setUserSettings(JSON.parse(savedSettings));
+    };
+
+    // --- AUTH ACTIONS ---
+    const handleLoginAction = async (type: 'google' | 'guest') => {
+        if (type === 'google' && isFirebaseAvailable) {
+            const provider = new GoogleAuthProvider();
+            try {
+                await signInWithPopup(auth, provider);
+            } catch (error) {
+                console.error("Login Error:", error);
+                alert("Error al iniciar sesión con Google.");
+            }
+        } else if (type === 'guest') {
             if (isFirebaseAvailable) {
-                // Modo Nube
                 try {
-                    // @ts-ignore
-                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                        // @ts-ignore
-                        await signInWithCustomToken(auth, __initial_auth_token);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
-                    
-                    const unsubscribe = onAuthStateChanged(auth, (currentUser: User | null) => {
-                        setUser(currentUser);
-                        if (!currentUser) setLoading(false);
-                    });
-                    return unsubscribe;
-                } catch (err) {
-                    console.error("Auth error, falling back to local:", err);
-                    isFirebaseAvailable = false;
-                    loadLocalData();
-                    setLoading(false);
+                    await signInAnonymously(auth);
+                } catch (error) {
+                    console.error("Anon Auth Error:", error);
                 }
             } else {
-                // Modo Local (Fallback inmediato si no hay config)
-                loadLocalData();
-                setLoading(false);
+                setUser({ uid: 'local_guest', isAnonymous: true } as User);
             }
-        };
+        }
+    };
 
-        const loadLocalData = () => {
-            const savedSessions = localStorage.getItem('spinTrackerSessions');
-            if (savedSessions) setSessions(JSON.parse(savedSessions));
-            
-            const savedSettings = localStorage.getItem('spinTrackerSettings');
-            if (savedSettings) setUserSettings(JSON.parse(savedSettings));
-        };
-
-        initialize();
-    }, []);
+    const handleLogout = async () => {
+        if (isFirebaseAvailable && auth) {
+            await signOut(auth);
+        } else {
+            setUser(null);
+        }
+    };
 
     // --- DATA LOADING (EFFECTS) ---
     useEffect(() => {
         if (!isFirebaseAvailable || !user) return;
 
-        setLoading(true);
-
-        // 1. Sessions
         const sessionsQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'));
         const unsubSessions = onSnapshot(sessionsQuery, (snapshot: QuerySnapshot) => {
             const loadedSessions: Session[] = snapshot.docs.map((doc: QueryDocumentSnapshot) => ({
@@ -381,14 +445,10 @@ function App() {
             } as Session));
             loadedSessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setSessions(loadedSessions);
-            setLoading(false);
         }, (error: Error) => {
             console.error("Error loading sessions (cloud):", error);
-            // Si falla la nube, intentamos no bloquear, aunque los datos podrían no estar
-            setLoading(false);
         });
 
-        // 2. Settings
         const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global');
         const unsubSettings = onSnapshot(settingsRef, (docSnap: DocumentSnapshot) => {
             if (docSnap.exists()) {
@@ -404,19 +464,18 @@ function App() {
 
     // Local Storage Sync (Backup for Local Mode)
     useEffect(() => {
-        if (!isFirebaseAvailable) {
+        if (!isFirebaseAvailable || (user && user.uid === 'local_guest')) {
             localStorage.setItem('spinTrackerSessions', JSON.stringify(sessions));
         }
-    }, [sessions]);
+    }, [sessions, user]);
 
     useEffect(() => {
-        if (!isFirebaseAvailable) {
+        if (!isFirebaseAvailable || (user && user.uid === 'local_guest')) {
             localStorage.setItem('spinTrackerSettings', JSON.stringify(userSettings));
         }
-    }, [userSettings]);
+    }, [userSettings, user]);
 
-    // --- CALCULATORS ---
-
+    // --- CALCULATORS & HELPERS ---
     useEffect(() => {
         if (isSessionModalOpen) {
             if (!formData.id) {
@@ -427,16 +486,12 @@ function App() {
     }, [isSessionModalOpen, userSettings.defaultPVI]);
 
     useEffect(() => {
-        const gamesCount = typeof formData.gamesCount === 'string' 
-            ? (parseInt(formData.gamesCount) || 0) 
-            : formData.gamesCount || 0;
-        
+        const gamesCount = typeof formData.gamesCount === 'string' ? (parseInt(formData.gamesCount) || 0) : formData.gamesCount || 0;
         const buyIn = formData.buyIn || 5;
 
         if (manualTPInput && buyIn && gamesCount > 0) {
             const grossRake = buyIn * gamesCount * SPIN_FEE_PERCENTAGE;
             const theoreticalTP = grossRake * TP_PER_DOLLAR_RAKE;
-            
             if (theoreticalTP > 0) {
                 const calculatedPVI = parseFloat(manualTPInput) / theoreticalTP;
                 setFormData(prev => ({ ...prev, pvi: calculatedPVI.toFixed(2) }));
@@ -571,19 +626,9 @@ function App() {
         };
     }, [sessions, userSettings.oceanRank, userSettings.exchangeGoalIndex, selectedMonth, userSettings.defaultPVI, isYearView]);
 
-    // --- HANDLERS (Hybrid) ---
-    
+    // HANDLERS (Same logic)
     const openAddModal = () => {
-        setFormData({
-            id: undefined,
-            date: new Date().toISOString().split('T')[0],
-            buyIn: 5,
-            gamesCount: 0,
-            pvi: userSettings.defaultPVI || 0.5,
-            leaderboardPrize: 0,
-            miningPrize: 0, 
-            notes: ''
-        });
+        setFormData({ id: undefined, date: new Date().toISOString().split('T')[0], buyIn: 5, gamesCount: 0, pvi: userSettings.defaultPVI || 0.5, leaderboardPrize: 0, miningPrize: 0, notes: '' });
         setManualTPInput('');
         setIsSessionModalOpen(true);
     };
@@ -596,24 +641,19 @@ function App() {
 
     const handleSaveSession = async (e: React.FormEvent) => {
         e.preventDefault();
-        
-        if (isFirebaseAvailable && user) {
-            // CLOUD MODE
+        if (isFirebaseAvailable && user && !user.isAnonymous) {
             try {
                 if (formData.id) {
                     const sessionRef = doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', formData.id);
                     await updateDoc(sessionRef, { ...formData });
                 } else {
-                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), {
-                        ...formData
-                    });
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), { ...formData });
                 }
             } catch (error) {
                 console.error("Error saving cloud:", error);
-                alert("Error guardando en la nube.");
+                alert("Error al conectar con la nube.");
             }
         } else {
-            // LOCAL MODE
             if (formData.id) {
                 const updatedSessions = sessions.map(s => s.id === formData.id ? { ...formData, id: formData.id } as Session : s);
                 setSessions(updatedSessions);
@@ -632,15 +672,11 @@ function App() {
 
     const confirmDelete = async () => {
         if (sessionToDelete) {
-            if (isFirebaseAvailable && user) {
-                // Cloud Delete
+            if (isFirebaseAvailable && user && !user.isAnonymous) {
                 try {
                     await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', sessionToDelete));
-                } catch (error) {
-                    console.error("Error deleting cloud:", error);
-                }
+                } catch (error) { console.error(error); }
             } else {
-                // Local Delete
                 setSessions(sessions.filter(s => s.id !== sessionToDelete));
             }
             setSessionToDelete(null);
@@ -649,18 +685,13 @@ function App() {
     };
 
     const saveSettings = async () => {
-        if (isFirebaseAvailable && user) {
+        if (isFirebaseAvailable && user && !user.isAnonymous) {
             try {
                 await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global'), userSettings, { merge: true });
-            } catch (error) {
-                console.error("Error saving settings cloud:", error);
-            }
+            } catch (error) { console.error(error); }
         }
-        // Local mode saves via useEffect automatically
         setIsSettingsModalOpen(false);
     };
-
-    // --- FORMATTERS ---
 
     const formatCurrency = (val: number | string) => {
         const num = typeof val === 'string' ? parseFloat(val) : val;
@@ -682,18 +713,28 @@ function App() {
         return date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     };
 
-    if (loading) {
+    // --- RENDER LOGIC ---
+
+    if (!authInitialized) {
         return (
             <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-sans">
                 <StyleInjector />
-                <div className="flex flex-col items-center gap-3">
-                    <Loader2 size={32} className="animate-spin text-cyan-500" />
-                    <p className="text-sm">Iniciando SpinTracker...</p>
-                </div>
+                <Loader2 size={32} className="animate-spin text-cyan-500" />
             </div>
         );
     }
 
+    // PANTALLA DE LOGIN
+    if (!user) {
+        return (
+            <React.Fragment>
+                <StyleInjector />
+                <LoginPage onLogin={handleLoginAction} isCloudAvailable={isFirebaseAvailable} />
+            </React.Fragment>
+        );
+    }
+
+    // DASHBOARD PRINCIPAL
     return (
         <div className="min-h-screen font-sans text-slate-200 selection:bg-cyan-500 selection:text-white">
             <StyleInjector />
@@ -808,14 +849,12 @@ function App() {
                                 .map(([stake, data]) => (
                                     <div key={stake} className="flex flex-wrap items-center justify-between gap-4 p-2 rounded-lg hover:bg-slate-800/30 transition-colors border-b border-slate-800/50 last:border-0">
                                         
-                                        {/* Stake Label */}
                                         <div className="flex items-center gap-3 min-w-[120px]">
                                             <div className="bg-slate-800 p-1.5 rounded text-cyan-400 font-bold font-mono text-sm border border-slate-700">
                                                 ${stake} Stake
                                             </div>
                                         </div>
 
-                                        {/* Volume */}
                                         <div className="flex items-center gap-2 min-w-[150px]">
                                             <Gamepad2 size={16} className="text-purple-400" />
                                             <div>
@@ -824,7 +863,6 @@ function App() {
                                             </div>
                                         </div>
 
-                                        {/* Rake Total */}
                                         <div className="flex items-center gap-2 min-w-[150px]">
                                             <Coins size={16} className="text-amber-400" />
                                             <div>
@@ -833,7 +871,6 @@ function App() {
                                             </div>
                                         </div>
 
-                                        {/* Meta Context */}
                                         <div className="hidden lg:block ml-auto text-xs text-slate-600">
                                             Meta: {formatCurrency(stats.targetGoal.cash)}
                                         </div>
@@ -884,7 +921,7 @@ function App() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800">
-                                {/* VISTA ANUAL (Por Meses) */}
+                                {/* VISTA ANUAL */}
                                 {isYearView && stats.monthsBreakdown.length > 0 && (
                                     stats.monthsBreakdown.map(monthData => (
                                         <tr key={monthData.date} className="hover:bg-slate-800/50 transition-colors">
@@ -913,7 +950,7 @@ function App() {
                                     ))
                                 )}
 
-                                {/* VISTA MENSUAL (Detalle Sesiones) */}
+                                {/* VISTA MENSUAL */}
                                 {!isYearView && stats.filteredSessions.length > 0 && (
                                     stats.filteredSessions.map(session => {
                                         const pvi = typeof session.pvi === 'string' ? parseFloat(session.pvi) : session.pvi || 0.5;
@@ -1170,9 +1207,32 @@ function App() {
                 </div>
             </Modal>
 
-            {/* MODAL: SETTINGS */}
-            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Configuración Global">
+            {/* MODAL: SETTINGS & ACCOUNT */}
+            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Cuenta y Configuración">
                 <div className="space-y-8">
+                    
+                    {/* ACCOUNT INFO SECTION (LOGOUT ONLY) */}
+                    {user && (
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-col gap-3">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <UserIcon size={18} className="text-indigo-400" />
+                                    <span className="text-sm font-medium text-white">{user.isAnonymous ? 'Invitado' : user.email}</span>
+                                </div>
+                                <div className="text-xs px-2 py-1 rounded bg-slate-900 border border-slate-700">
+                                    {isFirebaseAvailable && !user.isAnonymous ? 'Nube' : 'Local'}
+                                </div>
+                            </div>
+                            <button 
+                                onClick={handleLogout}
+                                className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 self-start"
+                            >
+                                <LogOut size={12} /> Cerrar Sesión / Cambiar Cuenta
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Ocean Status */}
                     <div>
                         <label className="block text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
                             <Settings size={18} className="text-cyan-400" /> Estatus Ocean Actual
@@ -1203,13 +1263,13 @@ function App() {
                         </div>
                     </div>
 
+                    {/* GEM EXCHANGE TARGET */}
                     <div>
                         <label className="block text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
                             <Target size={18} className="text-emerald-400" /> Meta de Canje (Tienda)
                         </label>
                         <p className="text-xs text-slate-500 mb-3 -mt-3">
-                            Selecciona tu meta de ahorro. Cuanto más alto el canje, más valor tienen tus gemas.
-                            Esto ajustará tus cálculos de Rakeback proyectado.
+                            Selecciona tu meta de ahorro para proyectar tus ganancias.
                         </p>
                         <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                             {GEM_EXCHANGE_TIERS.map((tier, index) => {
