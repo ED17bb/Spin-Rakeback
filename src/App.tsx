@@ -20,13 +20,11 @@ import {
   AlertTriangle,
   CalendarRange,
   Loader2,
+  CloudOff, 
   Database,   
   HardDrive,
   LogOut,
-  User as UserIcon,
-  ShieldCheck,
-  ShieldAlert,
-  LogIn
+  User as UserIcon
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -107,19 +105,17 @@ interface StakeData {
   rake: number;
 }
 
-// --- FIREBASE CONFIGURATION (¡PEGA TUS LLAVES AQUÍ!) ---
+// --- FIREBASE CONFIGURATION ---
 const YOUR_FIREBASE_CONFIG = {
-  // 1. Ve a Firebase Console -> Configuración del Proyecto -> General -> Tus apps
-  // 2. Copia el objeto 'firebaseConfig' y pégalo aquí reemplazando estas líneas:
-  apiKey: "AIzaSyA_moODg4OQhTHedzQ4_vJAVeZbhVFCCto",
-  authDomain: "spin-rakeback-tracker.firebaseapp.com",
-  projectId: "spin-rakeback-tracker",
-  storageBucket: "spin-rakeback-tracker.firebasestorage.app",
-  messagingSenderId: "193768744384",
-  appId: "1:193768744384:web:4745748844d8d9117a5425"
-};
+    apiKey: "AIzaSyA_moODg4OQhTHedzQ4_vJAVeZbhVFCCto",
+    authDomain: "spin-rakeback-tracker.firebaseapp.com",
+    projectId: "spin-rakeback-tracker",
+    storageBucket: "spin-rakeback-tracker.firebasestorage.app",
+    messagingSenderId: "193768744384",
+    appId: "1:193768744384:web:4745748844d8d9117a5425"
+  };
 
-// --- FIREBASE INITIALIZATION ---
+// --- FIREBASE INITIALIZATION (SAFE MODE) ---
 let auth: any = null;
 let db: any = null;
 let isFirebaseAvailable = false;
@@ -129,7 +125,6 @@ try {
   // @ts-ignore
   let envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
   
-  // Si no hay config automática, usamos la manual que pegaste arriba
   // @ts-ignore
   if (!envConfig && YOUR_FIREBASE_CONFIG.apiKey && YOUR_FIREBASE_CONFIG.apiKey !== "TU_API_KEY_AQUI") {
       envConfig = YOUR_FIREBASE_CONFIG;
@@ -145,7 +140,7 @@ try {
     isFirebaseAvailable = true;
   }
 } catch (e) {
-  console.warn("Firebase Init Failed (Check your keys):", e);
+  console.warn("Firebase Init Failed:", e);
 }
 
 // --- ERROR BOUNDARY ---
