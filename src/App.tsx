@@ -19,7 +19,9 @@ import {
   Pencil, 
   AlertTriangle,
   CalendarRange,
-  Loader2 
+  Loader2,
+  CloudOff, 
+  Cloud     
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -65,7 +67,7 @@ interface GemExchangeTier {
 }
 
 interface Session {
-  id: string; // Firestore IDs son strings
+  id: string; 
   date: string;
   buyIn: number;
   gamesCount: number | string; 
@@ -97,17 +99,65 @@ interface StakeData {
   rake: number;
 }
 
-// --- FIREBASE CONFIGURATION & INIT ---
-// @ts-ignore
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+// --- FIREBASE INITIALIZATION (SAFE MODE) ---
+let auth: any = null;
+let db: any = null;
+let isFirebaseAvailable = false;
+let appId = 'spin-tracker';
 
-// CORRECCIÓN CRÍTICA: Sanitizar appId para evitar rutas inválidas en Firestore
-// @ts-ignore
-const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'spin-tracker';
-const appId = rawAppId.replace(/[\/.]/g, '_'); 
+try {
+  // @ts-ignore
+  const envConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+  
+  if (envConfig) {
+    const firebaseApp = initializeApp(envConfig);
+    auth = getAuth(firebaseApp);
+    db = getFirestore(firebaseApp);
+    // @ts-ignore
+    const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'spin-tracker';
+    appId = rawAppId.replace(/[\/.]/g, '_');
+    isFirebaseAvailable = true;
+  } else {
+    console.warn("⚠️ Firebase Config not found. Running in Offline/LocalStorage Mode.");
+  }
+} catch (e) {
+  console.warn("⚠️ Firebase Init Failed. Running in Offline/LocalStorage Mode.", e);
+  isFirebaseAvailable = false;
+}
+
+// --- ERROR BOUNDARY COMPONENT ---
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: Error | null}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
+          <AlertTriangle size={48} className="text-red-500 mb-4" />
+          <h1 className="text-xl font-bold mb-2">Algo salió mal</h1>
+          <p className="text-slate-400 text-sm mb-4 text-center">La aplicación ha encontrado un error inesperado.</p>
+          <pre className="bg-slate-900 p-4 rounded text-xs text-red-300 overflow-auto max-w-full">
+            {this.state.error?.toString()}
+          </pre>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-6 bg-cyan-600 px-4 py-2 rounded-lg text-sm font-bold"
+          >
+            Recargar Página
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // --- INYECTOR DE ESTILOS ROBUSTO ---
 const StyleInjector = () => {
@@ -238,13 +288,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
     );
 };
 
-// --- MAIN APP ---
+// --- MAIN APP COMPONENT ---
 
-export default function App() {
+function App() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     
-    // State Data (Ahora viene de Firebase)
+    // State Data 
     const [sessions, setSessions] = useState<Session[]>([]);
     const [userSettings, setUserSettings] = useState<UserSettings>({ 
         oceanRank: 'turtle', 
@@ -275,49 +325,72 @@ export default function App() {
 
     const [manualTPInput, setManualTPInput] = useState<string>('');
 
-    // --- FIREBASE AUTH & DATA SYNC ---
+    // --- INITIALIZATION ---
     useEffect(() => {
-        const initAuth = async () => {
-            // @ts-ignore
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                // @ts-ignore
-                await signInWithCustomToken(auth, __initial_auth_token);
+        const initialize = async () => {
+            if (isFirebaseAvailable) {
+                // Modo Nube
+                try {
+                    // @ts-ignore
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        // @ts-ignore
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    
+                    const unsubscribe = onAuthStateChanged(auth, (currentUser: User | null) => {
+                        setUser(currentUser);
+                        if (!currentUser) setLoading(false);
+                    });
+                    return unsubscribe;
+                } catch (err) {
+                    console.error("Auth error, falling back to local:", err);
+                    isFirebaseAvailable = false;
+                    loadLocalData();
+                    setLoading(false);
+                }
             } else {
-                await signInAnonymously(auth);
+                // Modo Local (Fallback inmediato si no hay config)
+                loadLocalData();
+                setLoading(false);
             }
         };
-        initAuth();
-        
-        const unsubscribe = onAuthStateChanged(auth, (currentUser: User | null) => {
-            setUser(currentUser);
-            if (!currentUser) setLoading(false);
-        });
-        return () => unsubscribe();
+
+        const loadLocalData = () => {
+            const savedSessions = localStorage.getItem('spinTrackerSessions');
+            if (savedSessions) setSessions(JSON.parse(savedSessions));
+            
+            const savedSettings = localStorage.getItem('spinTrackerSettings');
+            if (savedSettings) setUserSettings(JSON.parse(savedSettings));
+        };
+
+        initialize();
     }, []);
 
-    // Load Sessions & Settings from Firestore
+    // --- DATA LOADING (EFFECTS) ---
     useEffect(() => {
-        if (!user) return;
+        if (!isFirebaseAvailable || !user) return;
 
         setLoading(true);
 
-        // 1. Sessions Listener
+        // 1. Sessions
         const sessionsQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'));
         const unsubSessions = onSnapshot(sessionsQuery, (snapshot: QuerySnapshot) => {
             const loadedSessions: Session[] = snapshot.docs.map((doc: QueryDocumentSnapshot) => ({
                 id: doc.id,
                 ...doc.data()
             } as Session));
-            // Ordenar por fecha descendente en cliente
             loadedSessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setSessions(loadedSessions);
             setLoading(false);
         }, (error: Error) => {
-            console.error("Error loading sessions:", error);
+            console.error("Error loading sessions (cloud):", error);
+            // Si falla la nube, intentamos no bloquear, aunque los datos podrían no estar
             setLoading(false);
         });
 
-        // 2. Settings Listener
+        // 2. Settings
         const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global');
         const unsubSettings = onSnapshot(settingsRef, (docSnap: DocumentSnapshot) => {
             if (docSnap.exists()) {
@@ -331,11 +404,23 @@ export default function App() {
         };
     }, [user]);
 
+    // Local Storage Sync (Backup for Local Mode)
+    useEffect(() => {
+        if (!isFirebaseAvailable) {
+            localStorage.setItem('spinTrackerSessions', JSON.stringify(sessions));
+        }
+    }, [sessions]);
+
+    useEffect(() => {
+        if (!isFirebaseAvailable) {
+            localStorage.setItem('spinTrackerSettings', JSON.stringify(userSettings));
+        }
+    }, [userSettings]);
+
     // --- CALCULATORS ---
 
     useEffect(() => {
         if (isSessionModalOpen) {
-            // Actualizar el form con el PVI default si es nuevo registro
             if (!formData.id) {
                 setFormData(prev => ({ ...prev, pvi: userSettings.defaultPVI }));
             }
@@ -488,7 +573,7 @@ export default function App() {
         };
     }, [sessions, userSettings.oceanRank, userSettings.exchangeGoalIndex, selectedMonth, userSettings.defaultPVI, isYearView]);
 
-    // --- HANDLERS (Firestore) ---
+    // --- HANDLERS (Hybrid) ---
     
     const openAddModal = () => {
         setFormData({
@@ -513,24 +598,33 @@ export default function App() {
 
     const handleSaveSession = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user) return;
-
-        try {
-            if (formData.id) {
-                // UPDATE (Firestore)
-                const sessionRef = doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', formData.id);
-                await updateDoc(sessionRef, { ...formData });
-            } else {
-                // CREATE (Firestore)
-                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), {
-                    ...formData
-                });
+        
+        if (isFirebaseAvailable && user) {
+            // CLOUD MODE
+            try {
+                if (formData.id) {
+                    const sessionRef = doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', formData.id);
+                    await updateDoc(sessionRef, { ...formData });
+                } else {
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), {
+                        ...formData
+                    });
+                }
+            } catch (error) {
+                console.error("Error saving cloud:", error);
+                alert("Error guardando en la nube.");
             }
-            setIsSessionModalOpen(false);
-        } catch (error) {
-            console.error("Error saving session:", error);
-            alert("Error al guardar en la nube. Intenta de nuevo.");
+        } else {
+            // LOCAL MODE
+            if (formData.id) {
+                const updatedSessions = sessions.map(s => s.id === formData.id ? { ...formData, id: formData.id } as Session : s);
+                setSessions(updatedSessions);
+            } else {
+                const newSession = { ...formData, id: Date.now().toString() } as Session;
+                setSessions([newSession, ...sessions]);
+            }
         }
+        setIsSessionModalOpen(false);
     };
 
     const initiateDelete = (id: string | null) => {
@@ -539,25 +633,33 @@ export default function App() {
     };
 
     const confirmDelete = async () => {
-        if (sessionToDelete && user) {
-            try {
-                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', sessionToDelete));
-                setSessionToDelete(null);
-                setIsDeleteModalOpen(false);
-            } catch (error) {
-                console.error("Error deleting session:", error);
+        if (sessionToDelete) {
+            if (isFirebaseAvailable && user) {
+                // Cloud Delete
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', sessionToDelete));
+                } catch (error) {
+                    console.error("Error deleting cloud:", error);
+                }
+            } else {
+                // Local Delete
+                setSessions(sessions.filter(s => s.id !== sessionToDelete));
             }
+            setSessionToDelete(null);
+            setIsDeleteModalOpen(false);
         }
     };
 
     const saveSettings = async () => {
-        if (!user) return;
-        try {
-            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global'), userSettings, { merge: true });
-            setIsSettingsModalOpen(false);
-        } catch (error) {
-            console.error("Error saving settings:", error);
+        if (isFirebaseAvailable && user) {
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global'), userSettings, { merge: true });
+            } catch (error) {
+                console.error("Error saving settings cloud:", error);
+            }
         }
+        // Local mode saves via useEffect automatically
+        setIsSettingsModalOpen(false);
     };
 
     // --- FORMATTERS ---
@@ -588,7 +690,7 @@ export default function App() {
                 <StyleInjector />
                 <div className="flex flex-col items-center gap-3">
                     <Loader2 size={32} className="animate-spin text-cyan-500" />
-                    <p className="text-sm">Sincronizando con la nube...</p>
+                    <p className="text-sm">Iniciando SpinTracker...</p>
                 </div>
             </div>
         );
@@ -1170,4 +1272,12 @@ export default function App() {
 
         </div>
     );
+}
+
+export default function AppWrapper() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
 }
