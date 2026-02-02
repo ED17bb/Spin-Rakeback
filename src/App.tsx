@@ -19,20 +19,69 @@ import {
   Wand2,
   Pencil, 
   AlertTriangle,
-  CalendarRange
+  CalendarRange,
+  LucideIcon
 } from 'lucide-react';
 
-// --- INYECTOR DE ESTILOS ROBUSTO (Fix para StackBlitz) ---
+// --- TYPES & INTERFACES ---
+
+interface OceanLevel {
+  id: string;
+  name: string;
+  labelPercent: string;
+  multiplier: number;
+  color: string;
+  border: string;
+  bg: string;
+}
+
+interface GemExchangeTier {
+  cash: number;
+  gems: number;
+}
+
+interface Session {
+  id: number | null;
+  date: string;
+  buyIn: number;
+  gamesCount: number | string; // Permite string vacío para inputs
+  pvi: number | string;
+  leaderboardPrize: number | string;
+  miningPrize: number | string;
+  notes: string;
+}
+
+interface UserSettings {
+  oceanRank: string;
+  defaultPVI: number | string;
+  exchangeGoalIndex: number;
+}
+
+interface MonthData {
+  date: string;
+  games: number;
+  rake: number;
+  tp: number;
+  gemsVal: number;
+  mining: number;
+  lb: number;
+  totalRB: number;
+}
+
+interface StakeData {
+  count: number;
+  rake: number;
+}
+
+// --- INYECTOR DE ESTILOS ROBUSTO ---
 const StyleInjector = () => {
   useEffect(() => {
-    // 1. Forzar Estilos Globales al Body inmediatamente
-    document.body.style.backgroundColor = "#020617"; // slate-950
-    document.body.style.color = "#e2e8f0"; // slate-200
+    document.body.style.backgroundColor = "#020617";
+    document.body.style.color = "#e2e8f0";
     document.body.style.fontFamily = "'Inter', sans-serif";
     document.body.style.margin = "0";
     document.body.style.padding = "0";
 
-    // 2. Inyectar Fuente Google (Inter)
     if (!document.getElementById('font-inter')) {
       const link = document.createElement('link');
       link.id = 'font-inter';
@@ -41,19 +90,20 @@ const StyleInjector = () => {
       document.head.appendChild(link);
     }
 
-    // 3. Inyectar Tailwind CSS (Versión CDN Estable)
     if (!document.getElementById('tailwind-cdn')) {
       const script = document.createElement('script');
       script.id = 'tailwind-cdn';
       script.src = "https://cdn.tailwindcss.com";
-      // Configuración básica de Tailwind para asegurar colores correctos
+      // @ts-ignore
       script.onload = () => {
+        // @ts-ignore
         if (window.tailwind) {
+          // @ts-ignore
           window.tailwind.config = {
             theme: {
               extend: {
                 colors: {
-                  slate: { 950: '#020617' } // Asegurar el color de fondo exacto
+                  slate: { 950: '#020617' }
                 },
                 fontFamily: {
                   sans: ['Inter', 'sans-serif'],
@@ -71,7 +121,7 @@ const StyleInjector = () => {
 
 // --- CONSTANTS & CONFIGURATION ---
 
-const OCEAN_LEVELS = [
+const OCEAN_LEVELS: OceanLevel[] = [
     { id: 'shark', name: 'Shark', labelPercent: '80', multiplier: 5.0, color: 'text-red-500', border: 'border-red-500', bg: 'bg-red-500' },
     { id: 'whale', name: 'Whale', labelPercent: '70', multiplier: 4.5, color: 'text-purple-500', border: 'border-purple-500', bg: 'bg-purple-500' },
     { id: 'dolphin', name: 'Dolphin', labelPercent: '60', multiplier: 4.0, color: 'text-cyan-400', border: 'border-cyan-400', bg: 'bg-cyan-400' },
@@ -82,7 +132,7 @@ const OCEAN_LEVELS = [
     { id: 'fish', name: 'Fish', labelPercent: '16', multiplier: 1.5, color: 'text-blue-300', border: 'border-blue-300', bg: 'bg-blue-300' },
 ];
 
-const GEM_EXCHANGE_TIERS = [
+const GEM_EXCHANGE_TIERS: GemExchangeTier[] = [
     { cash: 5, gems: 5000 },
     { cash: 10, gems: 9500 },
     { cash: 25, gems: 23000 },
@@ -105,7 +155,15 @@ const GEMS_BASE_PER_DOLLAR = 100;
 
 // --- COMPONENTS ---
 
-const StatCard = ({ title, value, subtext, icon: Icon, colorClass }) => (
+interface StatCardProps {
+  title: string;
+  value: string;
+  subtext: string;
+  icon: LucideIcon;
+  colorClass: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ title, value, subtext, icon: Icon, colorClass }) => (
     <div className="bg-slate-800/70 backdrop-blur-md border border-white/5 p-4 rounded-xl flex items-start justify-between shadow-lg hover:bg-slate-800 transition-colors group">
         <div>
             <p className="text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1 group-hover:text-slate-300 transition-colors">{title}</p>
@@ -118,7 +176,14 @@ const StatCard = ({ title, value, subtext, icon: Icon, colorClass }) => (
     </div>
 );
 
-const Modal = ({ isOpen, onClose, title, children }) => {
+interface ModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}
+
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -141,7 +206,7 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 
 export default function App() {
     // State
-    const [sessions, setSessions] = useState(() => {
+    const [sessions, setSessions] = useState<Session[]>(() => {
         try {
             const saved = localStorage.getItem('spinTrackerSessions');
             return saved ? JSON.parse(saved) : [];
@@ -151,7 +216,7 @@ export default function App() {
     });
     
     // Configuración - Default 'turtle'
-    const [userSettings, setUserSettings] = useState(() => {
+    const [userSettings, setUserSettings] = useState<UserSettings>(() => {
         try {
             const saved = localStorage.getItem('spinTrackerSettings');
             return saved ? JSON.parse(saved) : { oceanRank: 'turtle', defaultPVI: 0.5, exchangeGoalIndex: 4 };
@@ -160,18 +225,18 @@ export default function App() {
         }
     });
 
-    const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-    const [isYearView, setIsYearView] = useState(false); // Nuevo estado para Vista Anual
+    const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
+    const [isYearView, setIsYearView] = useState<boolean>(false);
     
     // Modals States
     const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [sessionToDelete, setSessionToDelete] = useState(null);
+    const [sessionToDelete, setSessionToDelete] = useState<number | null>(null);
     
-    // Form State (Unified for Add & Edit)
-    const [formData, setFormData] = useState({
-        id: null, // Si es null, es nuevo. Si tiene ID, es edición.
+    // Form State
+    const [formData, setFormData] = useState<Session>({
+        id: null,
         date: new Date().toISOString().split('T')[0],
         buyIn: 5,
         gamesCount: 0,
@@ -181,7 +246,7 @@ export default function App() {
         notes: ''
     });
 
-    const [manualTPInput, setManualTPInput] = useState('');
+    const [manualTPInput, setManualTPInput] = useState<string>('');
 
     useEffect(() => {
         localStorage.setItem('spinTrackerSessions', JSON.stringify(sessions));
@@ -193,7 +258,9 @@ export default function App() {
 
     // Auto-calculate PVI in modal
     useEffect(() => {
-        const gamesCount = parseInt(formData.gamesCount) || 0;
+        const gamesCount = typeof formData.gamesCount === 'string' 
+            ? (parseInt(formData.gamesCount) || 0) 
+            : formData.gamesCount;
         
         if (manualTPInput && formData.buyIn && gamesCount > 0) {
             const grossRake = formData.buyIn * gamesCount * SPIN_FEE_PERCENTAGE;
@@ -225,17 +292,15 @@ export default function App() {
         let totalRakebackUSD = 0;
         let weightedPVISum = 0; 
         
-        const stakesBreakdown = {}; 
-        
-        // Estructura para agrupar por meses en vista anual
-        const monthsBreakdown = {}; 
+        const stakesBreakdown: Record<string, StakeData> = {}; 
+        const monthsBreakdown: Record<string, MonthData> = {}; 
 
         const currentRank = OCEAN_LEVELS.find(l => l.id === userSettings.oceanRank) || OCEAN_LEVELS[4];
         const goalIndex = typeof userSettings.exchangeGoalIndex === 'number' ? userSettings.exchangeGoalIndex : 4;
         const targetGoal = GEM_EXCHANGE_TIERS[goalIndex] || GEM_EXCHANGE_TIERS[4];
         const gemExchangeRate = targetGoal.cash / targetGoal.gems; 
 
-        // Filtrado principal: Mes o Año
+        // Filtrado principal
         const selectedYear = selectedMonth.split('-')[0];
         
         const filteredSessions = sessions.filter(s => {
@@ -247,9 +312,9 @@ export default function App() {
         });
 
         filteredSessions.forEach(session => {
-            const pvi = parseFloat(session.pvi) || 0.5;
-            const gamesCount = parseInt(session.gamesCount) || 0;
-            const buyIn = parseFloat(session.buyIn);
+            const pvi = typeof session.pvi === 'string' ? parseFloat(session.pvi) : session.pvi || 0.5;
+            const gamesCount = typeof session.gamesCount === 'string' ? parseInt(session.gamesCount) : session.gamesCount || 0;
+            const buyIn = session.buyIn;
             
             const sessionRakeGross = buyIn * gamesCount * SPIN_FEE_PERCENTAGE;
             const sessionRakePVI = sessionRakeGross * pvi;
@@ -257,11 +322,11 @@ export default function App() {
             const gemsCnt = sessionRakePVI * GEMS_BASE_PER_DOLLAR * currentRank.multiplier;
             const oceanVal = gemsCnt * gemExchangeRate;
 
-            const lb = parseFloat(session.leaderboardPrize) || 0;
-            const mine = parseFloat(session.miningPrize) || 0;
+            const lb = typeof session.leaderboardPrize === 'string' ? parseFloat(session.leaderboardPrize) : session.leaderboardPrize || 0;
+            const mine = typeof session.miningPrize === 'string' ? parseFloat(session.miningPrize) : session.miningPrize || 0;
             const totalSessionRB = oceanVal + lb + mine;
             
-            // Acumuladores Generales
+            // Acumuladores
             totalGames += gamesCount;
             totalRakeGross += sessionRakeGross;
             totalRakePVI += sessionRakePVI;
@@ -273,15 +338,16 @@ export default function App() {
             weightedPVISum += pvi * gamesCount;
 
             // Agrupar por Stake
-            if (!stakesBreakdown[buyIn]) {
-                stakesBreakdown[buyIn] = { count: 0, rake: 0 };
+            const stakeKey = buyIn.toString();
+            if (!stakesBreakdown[stakeKey]) {
+                stakesBreakdown[stakeKey] = { count: 0, rake: 0 };
             }
-            stakesBreakdown[buyIn].count += gamesCount;
-            stakesBreakdown[buyIn].rake += sessionRakeGross;
+            stakesBreakdown[stakeKey].count += gamesCount;
+            stakesBreakdown[stakeKey].rake += sessionRakeGross;
 
-            // Agrupar por Mes (Solo para vista Anual)
+            // Agrupar por Mes
             if (isYearView) {
-                const monthKey = session.date.slice(0, 7); // "YYYY-MM"
+                const monthKey = session.date.slice(0, 7); 
                 if (!monthsBreakdown[monthKey]) {
                     monthsBreakdown[monthKey] = {
                         date: monthKey,
@@ -311,12 +377,12 @@ export default function App() {
         const leaderboardRBPercent = totalRakeGross > 0 ? (totalLeaderboard / totalRakeGross) * 100 : 0;
         const oceanRBPercent = totalRakeGross > 0 ? (totalOceanGemsValue / totalRakeGross) * 100 : 0;
         
-        const defaultPVI = parseFloat(userSettings.defaultPVI) || 0.5;
+        const defaultPVI = typeof userSettings.defaultPVI === 'string' ? parseFloat(userSettings.defaultPVI) : userSettings.defaultPVI || 0.5;
         const avgPVI = totalGames > 0 ? (weightedPVISum / totalGames) : defaultPVI;
 
         return {
-            filteredSessions, // Sesiones filtradas (para vista mensual)
-            monthsBreakdown: Object.values(monthsBreakdown).sort((a, b) => b.date.localeCompare(a.date)), // Meses ordenados (para vista anual)
+            filteredSessions,
+            monthsBreakdown: Object.values(monthsBreakdown).sort((a, b) => b.date.localeCompare(a.date)),
             totalGames,
             totalRakeGross,
             totalRakePVI,
@@ -356,13 +422,13 @@ export default function App() {
         setIsSessionModalOpen(true);
     };
 
-    const openEditModal = (session) => {
+    const openEditModal = (session: Session) => {
         setFormData({ ...session });
         setManualTPInput('');
         setIsSessionModalOpen(true);
     };
 
-    const handleSaveSession = (e) => {
+    const handleSaveSession = (e: React.FormEvent) => {
         e.preventDefault();
         if (formData.id) {
             const updatedSessions = sessions.map(s => s.id === formData.id ? formData : s);
@@ -374,7 +440,7 @@ export default function App() {
         setIsSessionModalOpen(false);
     };
 
-    const initiateDelete = (id) => {
+    const initiateDelete = (id: number | null) => {
         setSessionToDelete(id);
         setIsDeleteModalOpen(true);
     };
@@ -387,39 +453,30 @@ export default function App() {
         }
     };
 
-    const formatCurrency = (val) => {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val || 0);
+    const formatCurrency = (val: number | string) => {
+        const num = typeof val === 'string' ? parseFloat(val) : val;
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num || 0);
     };
 
-    const formatNumber = (val) => {
-        return new Intl.NumberFormat('en-US').format(val || 0);
+    const formatNumber = (val: number | string) => {
+        const num = typeof val === 'string' ? parseFloat(val) : val;
+        return new Intl.NumberFormat('en-US').format(num || 0);
     };
     
-    const formatPercent = (val) => {
+    const formatPercent = (val: number) => {
         return `${(val || 0).toFixed(1)}%`;
     };
     
-    const formatMonth = (dateStr) => {
+    const formatMonth = (dateStr: string) => {
         const [y, m] = dateStr.split('-');
-        const date = new Date(y, m - 1);
+        const date = new Date(parseInt(y), parseInt(m) - 1);
         return date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     };
 
     return (
         <div className="min-h-screen font-sans text-slate-200 selection:bg-cyan-500 selection:text-white">
-            <StyleInjector /> {/* INYECCIÓN AUTOMÁTICA DE ESTILOS */}
+            <StyleInjector />
             
-            {/* Styles Injection Local (Backup) */}
-            <style>{`
-                ::-webkit-scrollbar { width: 8px; }
-                ::-webkit-scrollbar-track { background: #0f172a; }
-                ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-                ::-webkit-scrollbar-thumb:hover { background: #475569; }
-                .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-                .capitalize { text-transform: capitalize; }
-            `}</style>
-
             {/* Header */}
             <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-30 shadow-2xl">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -435,8 +492,6 @@ export default function App() {
                         </div>
                         
                         <div className="flex items-center gap-3">
-                            
-                            {/* Year View Toggle */}
                             <button
                                 onClick={() => setIsYearView(!isYearView)}
                                 className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg border transition-all ${
@@ -458,7 +513,6 @@ export default function App() {
                                     value={selectedMonth}
                                     onChange={(e) => {
                                         setSelectedMonth(e.target.value);
-                                        // Si cambia el mes, quizás quiera salir de la vista anual, o quedarse en el nuevo año
                                     }}
                                     className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg pl-9 pr-8 py-2 focus:ring-2 focus:ring-cyan-500 outline-none appearance-none capitalize cursor-pointer hover:bg-slate-700 transition-colors"
                                 >
@@ -485,7 +539,7 @@ export default function App() {
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
                 
-                {/* Stats Cards (Agregadas - Totales) */}
+                {/* Stats Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <StatCard 
                         title="Tus Gemas" 
@@ -532,15 +586,11 @@ export default function App() {
                                 .sort(([a], [b]) => parseFloat(a) - parseFloat(b))
                                 .map(([stake, data]) => (
                                     <div key={stake} className="flex flex-wrap items-center justify-between gap-4 p-2 rounded-lg hover:bg-slate-800/30 transition-colors border-b border-slate-800/50 last:border-0">
-                                        
-                                        {/* Stake Label */}
                                         <div className="flex items-center gap-3 min-w-[120px]">
                                             <div className="bg-slate-800 p-1.5 rounded text-cyan-400 font-bold font-mono text-sm border border-slate-700">
                                                 ${stake} Stake
                                             </div>
                                         </div>
-
-                                        {/* Volume */}
                                         <div className="flex items-center gap-2 min-w-[150px]">
                                             <Gamepad2 size={16} className="text-purple-400" />
                                             <div>
@@ -548,8 +598,6 @@ export default function App() {
                                                 <span className="text-white font-medium">{formatNumber(data.count)}</span>
                                             </div>
                                         </div>
-
-                                        {/* Rake Total */}
                                         <div className="flex items-center gap-2 min-w-[150px]">
                                             <Coins size={16} className="text-amber-400" />
                                             <div>
@@ -557,8 +605,6 @@ export default function App() {
                                                 <span className="text-white font-medium">{formatCurrency(data.rake)}</span>
                                             </div>
                                         </div>
-
-                                        {/* Meta Context */}
                                         <div className="hidden lg:block ml-auto text-xs text-slate-600">
                                             Meta: {formatCurrency(stats.targetGoal.cash)}
                                         </div>
@@ -641,17 +687,15 @@ export default function App() {
                                 {/* VISTA MENSUAL (Detalle Sesiones) */}
                                 {!isYearView && stats.filteredSessions.length > 0 && (
                                     stats.filteredSessions.map(session => {
-                                        const pvi = parseFloat(session.pvi) || 0.5;
-                                        const rakeGross = session.buyIn * session.gamesCount * SPIN_FEE_PERCENTAGE;
+                                        const pvi = typeof session.pvi === 'string' ? parseFloat(session.pvi) : session.pvi || 0.5;
+                                        const rakeGross = session.buyIn * (typeof session.gamesCount === 'string' ? parseInt(session.gamesCount) : session.gamesCount || 0) * SPIN_FEE_PERCENTAGE;
                                         const rakePVI = rakeGross * pvi;
-                                        
                                         const tp = rakePVI * TP_PER_DOLLAR_RAKE;
                                         const gemsCnt = rakePVI * GEMS_BASE_PER_DOLLAR * stats.currentRank.multiplier;
-                                        
                                         const oceanVal = gemsCnt * stats.gemExchangeRate;
                                         
-                                        const mine = parseFloat(session.miningPrize || 0);
-                                        const lb = parseFloat(session.leaderboardPrize || 0);
+                                        const mine = typeof session.miningPrize === 'string' ? parseFloat(session.miningPrize) : session.miningPrize || 0;
+                                        const lb = typeof session.leaderboardPrize === 'string' ? parseFloat(session.leaderboardPrize) : session.leaderboardPrize || 0;
                                         const totalRB = oceanVal + mine + lb;
                                         
                                         const oceanPercent = rakeGross > 0 ? (oceanVal / rakeGross) * 100 : 0;
@@ -719,7 +763,7 @@ export default function App() {
                                 {/* EMPTY STATE */}
                                 {((!isYearView && stats.filteredSessions.length === 0) || (isYearView && stats.monthsBreakdown.length === 0)) && (
                                     <tr>
-                                        <td colSpan="9" className="px-6 py-16 text-center">
+                                        <td colSpan={9} className="px-6 py-16 text-center">
                                             <div className="flex flex-col items-center gap-3">
                                                 <div className="p-4 bg-slate-800/50 rounded-full text-slate-600">
                                                     <Waves size={32} />
@@ -744,7 +788,6 @@ export default function App() {
             <Modal isOpen={isSessionModalOpen} onClose={() => setIsSessionModalOpen(false)} title={formData.id ? "Editar Sesión" : "Registrar Sesión"}>
                 <form onSubmit={handleSaveSession} className="space-y-5">
                     
-                    {/* 1. FECHA Y STAKE */}
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-1">
                             <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5">Fecha</label>
@@ -770,7 +813,6 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* 2. SPINS */}
                     <div>
                         <label className="block text-xs font-bold uppercase text-slate-500 mb-1.5 flex items-center gap-2">
                             <Gamepad2 size={14} className="text-cyan-400" /> Cantidad Spins
@@ -789,7 +831,6 @@ export default function App() {
                         />
                     </div>
 
-                    {/* 3. PVI CALCULATION */}
                     <div className="bg-slate-800/30 p-3 rounded-lg border border-slate-700/50">
                         <label className="block text-[10px] font-bold uppercase text-cyan-400 mb-3 flex items-center gap-1">
                             <Wand2 size={12} /> Cálculo de PVI (Ingresar TP Ganados)
@@ -803,7 +844,7 @@ export default function App() {
                                     value={manualTPInput}
                                     onChange={e => setManualTPInput(e.target.value)}
                                     className="w-full bg-slate-900 border border-slate-600 rounded-lg p-2.5 pl-9 text-sm text-white focus:border-cyan-500 outline-none"
-                                    disabled={!formData.gamesCount || formData.gamesCount <= 0}
+                                    disabled={!formData.gamesCount || (typeof formData.gamesCount === 'number' && formData.gamesCount <= 0)}
                                 />
                             </div>
                             <div className="relative">
@@ -819,16 +860,17 @@ export default function App() {
                                         setFormData({...formData, pvi: e.target.value});
                                         setManualTPInput(''); 
                                     }}
-                                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 pl-9 text-white focus:ring-2 focus:ring-cyan-500 outline-none font-mono font-bold ${formData.pvi < 1 ? 'text-red-400' : 'text-emerald-400'}`}
+                                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 pl-9 text-white focus:ring-2 focus:ring-cyan-500 outline-none font-mono font-bold ${
+                                      (typeof formData.pvi === 'string' ? parseFloat(formData.pvi) : formData.pvi) < 1 ? 'text-red-400' : 'text-emerald-400'
+                                    }`}
                                 />
                             </div>
                         </div>
-                        {(!formData.gamesCount || formData.gamesCount <= 0) && (
+                        {(!formData.gamesCount || (typeof formData.gamesCount === 'number' && formData.gamesCount <= 0)) && (
                             <p className="text-[10px] text-slate-500 mt-2 text-center">Ingresa la cantidad de spins arriba para calcular.</p>
                         )}
                     </div>
 
-                    {/* 4. PREMIOS (EXTRAS) */}
                     <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
                         <h4 className="text-xs uppercase font-bold text-amber-500 mb-3 flex items-center gap-2">
                             <Trophy size={16} /> Premios
@@ -902,8 +944,6 @@ export default function App() {
             {/* MODAL: SETTINGS */}
             <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} title="Configuración Global">
                 <div className="space-y-8">
-                    
-                    {/* Ocean Status */}
                     <div>
                         <label className="block text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
                             <Settings size={18} className="text-cyan-400" /> Estatus Ocean Actual
@@ -934,7 +974,6 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* GEM EXCHANGE TARGET */}
                     <div>
                         <label className="block text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
                             <Target size={18} className="text-emerald-400" /> Meta de Canje (Tienda)
@@ -945,7 +984,7 @@ export default function App() {
                         </p>
                         <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
                             {GEM_EXCHANGE_TIERS.map((tier, index) => {
-                                const rate = (tier.cash / tier.gems) * 1000; // Valor por 1k gemas
+                                const rate = (tier.cash / tier.gems) * 1000;
                                 const isSelected = userSettings.exchangeGoalIndex === index;
                                 return (
                                     <button
@@ -961,7 +1000,7 @@ export default function App() {
                                             ${tier.cash}
                                         </div>
                                         <div className="text-[10px] text-slate-500">
-                                            {formatNumber(tier.gems)} 💎
+                                            {new Intl.NumberFormat('en-US').format(tier.gems)} 💎
                                         </div>
                                         <div className="text-[10px] font-mono text-cyan-500/80 mt-1">
                                             ${rate.toFixed(3)}/1k
@@ -972,7 +1011,6 @@ export default function App() {
                         </div>
                     </div>
 
-                    {/* PVI Default */}
                     <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex items-center justify-between">
                          <div>
                              <label className="block text-sm font-medium text-slate-300">PVI por Defecto</label>
