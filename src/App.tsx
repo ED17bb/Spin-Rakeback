@@ -41,7 +41,10 @@ import {
   doc, 
   onSnapshot, 
   query,
-  setDoc
+  setDoc,
+  QuerySnapshot,
+  DocumentSnapshot,
+  QueryDocumentSnapshot
 } from 'firebase/firestore';
 
 // --- TYPES & INTERFACES ---
@@ -96,7 +99,7 @@ interface StakeData {
 
 // --- FIREBASE CONFIGURATION & INIT ---
 // @ts-ignore
-const firebaseConfig = JSON.parse(__firebase_config);
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -285,7 +288,7 @@ export default function App() {
         };
         initAuth();
         
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser: User | null) => {
             setUser(currentUser);
             if (!currentUser) setLoading(false);
         });
@@ -300,8 +303,8 @@ export default function App() {
 
         // 1. Sessions Listener
         const sessionsQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'));
-        const unsubSessions = onSnapshot(sessionsQuery, (snapshot) => {
-            const loadedSessions: Session[] = snapshot.docs.map(doc => ({
+        const unsubSessions = onSnapshot(sessionsQuery, (snapshot: QuerySnapshot) => {
+            const loadedSessions: Session[] = snapshot.docs.map((doc: QueryDocumentSnapshot) => ({
                 id: doc.id,
                 ...doc.data()
             } as Session));
@@ -309,14 +312,14 @@ export default function App() {
             loadedSessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setSessions(loadedSessions);
             setLoading(false);
-        }, (error) => {
+        }, (error: Error) => {
             console.error("Error loading sessions:", error);
             setLoading(false);
         });
 
         // 2. Settings Listener
         const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global');
-        const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
+        const unsubSettings = onSnapshot(settingsRef, (docSnap: DocumentSnapshot) => {
             if (docSnap.exists()) {
                 setUserSettings(docSnap.data() as UserSettings);
             }
