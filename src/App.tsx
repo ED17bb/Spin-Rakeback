@@ -10,7 +10,6 @@ import {
   Plus, 
   Trash2, 
   Trophy,
-  Pickaxe, 
   Calendar,
   Calculator,
   Gem, 
@@ -19,9 +18,9 @@ import {
   Wand2,
   Pencil, 
   AlertTriangle,
-  CalendarRange,
-  LucideIcon
+  CalendarRange
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 // --- TYPES & INTERFACES ---
 
@@ -586,11 +585,15 @@ export default function App() {
                                 .sort(([a], [b]) => parseFloat(a) - parseFloat(b))
                                 .map(([stake, data]) => (
                                     <div key={stake} className="flex flex-wrap items-center justify-between gap-4 p-2 rounded-lg hover:bg-slate-800/30 transition-colors border-b border-slate-800/50 last:border-0">
+                                        
+                                        {/* Stake Label */}
                                         <div className="flex items-center gap-3 min-w-[120px]">
                                             <div className="bg-slate-800 p-1.5 rounded text-cyan-400 font-bold font-mono text-sm border border-slate-700">
                                                 ${stake} Stake
                                             </div>
                                         </div>
+
+                                        {/* Volume */}
                                         <div className="flex items-center gap-2 min-w-[150px]">
                                             <Gamepad2 size={16} className="text-purple-400" />
                                             <div>
@@ -598,6 +601,8 @@ export default function App() {
                                                 <span className="text-white font-medium">{formatNumber(data.count)}</span>
                                             </div>
                                         </div>
+
+                                        {/* Rake Total */}
                                         <div className="flex items-center gap-2 min-w-[150px]">
                                             <Coins size={16} className="text-amber-400" />
                                             <div>
@@ -605,6 +610,8 @@ export default function App() {
                                                 <span className="text-white font-medium">{formatCurrency(data.rake)}</span>
                                             </div>
                                         </div>
+
+                                        {/* Meta Context */}
                                         <div className="hidden lg:block ml-auto text-xs text-slate-600">
                                             Meta: {formatCurrency(stats.targetGoal.cash)}
                                         </div>
