@@ -18,9 +18,31 @@ import {
   Wand2,
   Pencil, 
   AlertTriangle,
-  CalendarRange
+  CalendarRange,
+  Loader2 
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+
+// --- FIREBASE IMPORTS ---
+import { initializeApp } from 'firebase/app';
+import { 
+  getAuth, 
+  onAuthStateChanged, 
+  signInWithCustomToken, 
+  signInAnonymously,
+  User 
+} from 'firebase/auth';
+import { 
+  getFirestore, 
+  collection, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  doc, 
+  onSnapshot, 
+  query,
+  setDoc
+} from 'firebase/firestore';
 
 // --- TYPES & INTERFACES ---
 
@@ -40,10 +62,10 @@ interface GemExchangeTier {
 }
 
 interface Session {
-  id: number | null;
+  id: string; // Firestore IDs son strings
   date: string;
   buyIn: number;
-  gamesCount: number | string; // Permite string vacío para inputs
+  gamesCount: number | string; 
   pvi: number | string;
   leaderboardPrize: number | string;
   miningPrize: number | string;
@@ -71,6 +93,18 @@ interface StakeData {
   count: number;
   rake: number;
 }
+
+// --- FIREBASE CONFIGURATION & INIT ---
+// @ts-ignore
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// CORRECCIÓN CRÍTICA: Sanitizar appId para evitar rutas inválidas en Firestore
+// @ts-ignore
+const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'spin-tracker';
+const appId = rawAppId.replace(/[\/.]/g, '_'); 
 
 // --- INYECTOR DE ESTILOS ROBUSTO ---
 const StyleInjector = () => {
@@ -118,7 +152,7 @@ const StyleInjector = () => {
   return null;
 };
 
-// --- CONSTANTS & CONFIGURATION ---
+// --- CONSTANTS ---
 
 const OCEAN_LEVELS: OceanLevel[] = [
     { id: 'shark', name: 'Shark', labelPercent: '80', multiplier: 5.0, color: 'text-red-500', border: 'border-red-500', bg: 'bg-red-500' },
@@ -204,24 +238,15 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
 // --- MAIN APP ---
 
 export default function App() {
-    // State
-    const [sessions, setSessions] = useState<Session[]>(() => {
-        try {
-            const saved = localStorage.getItem('spinTrackerSessions');
-            return saved ? JSON.parse(saved) : [];
-        } catch (e) {
-            return [];
-        }
-    });
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
     
-    // Configuración - Default 'turtle'
-    const [userSettings, setUserSettings] = useState<UserSettings>(() => {
-        try {
-            const saved = localStorage.getItem('spinTrackerSettings');
-            return saved ? JSON.parse(saved) : { oceanRank: 'turtle', defaultPVI: 0.5, exchangeGoalIndex: 4 };
-        } catch (e) {
-            return { oceanRank: 'turtle', defaultPVI: 0.5, exchangeGoalIndex: 4 };
-        }
+    // State Data (Ahora viene de Firebase)
+    const [sessions, setSessions] = useState<Session[]>([]);
+    const [userSettings, setUserSettings] = useState<UserSettings>({ 
+        oceanRank: 'turtle', 
+        defaultPVI: 0.5, 
+        exchangeGoalIndex: 4 
     });
 
     const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7));
@@ -231,11 +256,11 @@ export default function App() {
     const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
     const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [sessionToDelete, setSessionToDelete] = useState<number | null>(null);
+    const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
     
     // Form State
-    const [formData, setFormData] = useState<Session>({
-        id: null,
+    const [formData, setFormData] = useState<Partial<Session>>({
+        id: undefined,
         date: new Date().toISOString().split('T')[0],
         buyIn: 5,
         gamesCount: 0,
@@ -247,22 +272,83 @@ export default function App() {
 
     const [manualTPInput, setManualTPInput] = useState<string>('');
 
+    // --- FIREBASE AUTH & DATA SYNC ---
     useEffect(() => {
-        localStorage.setItem('spinTrackerSessions', JSON.stringify(sessions));
-    }, [sessions]);
+        const initAuth = async () => {
+            // @ts-ignore
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                // @ts-ignore
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        };
+        initAuth();
+        
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+            setUser(currentUser);
+            if (!currentUser) setLoading(false);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Load Sessions & Settings from Firestore
+    useEffect(() => {
+        if (!user) return;
+
+        setLoading(true);
+
+        // 1. Sessions Listener
+        const sessionsQuery = query(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'));
+        const unsubSessions = onSnapshot(sessionsQuery, (snapshot) => {
+            const loadedSessions: Session[] = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as Session));
+            // Ordenar por fecha descendente en cliente
+            loadedSessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setSessions(loadedSessions);
+            setLoading(false);
+        }, (error) => {
+            console.error("Error loading sessions:", error);
+            setLoading(false);
+        });
+
+        // 2. Settings Listener
+        const settingsRef = doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global');
+        const unsubSettings = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setUserSettings(docSnap.data() as UserSettings);
+            }
+        });
+
+        return () => {
+            unsubSessions();
+            unsubSettings();
+        };
+    }, [user]);
+
+    // --- CALCULATORS ---
 
     useEffect(() => {
-        localStorage.setItem('spinTrackerSettings', JSON.stringify(userSettings));
-    }, [userSettings]);
+        if (isSessionModalOpen) {
+            // Actualizar el form con el PVI default si es nuevo registro
+            if (!formData.id) {
+                setFormData(prev => ({ ...prev, pvi: userSettings.defaultPVI }));
+            }
+            setManualTPInput(''); 
+        }
+    }, [isSessionModalOpen, userSettings.defaultPVI]);
 
-    // Auto-calculate PVI in modal
     useEffect(() => {
         const gamesCount = typeof formData.gamesCount === 'string' 
             ? (parseInt(formData.gamesCount) || 0) 
-            : formData.gamesCount;
+            : formData.gamesCount || 0;
         
-        if (manualTPInput && formData.buyIn && gamesCount > 0) {
-            const grossRake = formData.buyIn * gamesCount * SPIN_FEE_PERCENTAGE;
+        const buyIn = formData.buyIn || 5;
+
+        if (manualTPInput && buyIn && gamesCount > 0) {
+            const grossRake = buyIn * gamesCount * SPIN_FEE_PERCENTAGE;
             const theoreticalTP = grossRake * TP_PER_DOLLAR_RAKE;
             
             if (theoreticalTP > 0) {
@@ -278,7 +364,6 @@ export default function App() {
         return Array.from(months).sort().reverse();
     }, [sessions]);
 
-    // --- CALCULATIONS CORE ---
     const stats = useMemo(() => {
         let totalGames = 0;
         let totalRakeGross = 0;
@@ -299,7 +384,6 @@ export default function App() {
         const targetGoal = GEM_EXCHANGE_TIERS[goalIndex] || GEM_EXCHANGE_TIERS[4];
         const gemExchangeRate = targetGoal.cash / targetGoal.gems; 
 
-        // Filtrado principal
         const selectedYear = selectedMonth.split('-')[0];
         
         const filteredSessions = sessions.filter(s => {
@@ -325,7 +409,6 @@ export default function App() {
             const mine = typeof session.miningPrize === 'string' ? parseFloat(session.miningPrize) : session.miningPrize || 0;
             const totalSessionRB = oceanVal + lb + mine;
             
-            // Acumuladores
             totalGames += gamesCount;
             totalRakeGross += sessionRakeGross;
             totalRakePVI += sessionRakePVI;
@@ -336,7 +419,6 @@ export default function App() {
             totalMining += mine;
             weightedPVISum += pvi * gamesCount;
 
-            // Agrupar por Stake
             const stakeKey = buyIn.toString();
             if (!stakesBreakdown[stakeKey]) {
                 stakesBreakdown[stakeKey] = { count: 0, rake: 0 };
@@ -344,7 +426,6 @@ export default function App() {
             stakesBreakdown[stakeKey].count += gamesCount;
             stakesBreakdown[stakeKey].rake += sessionRakeGross;
 
-            // Agrupar por Mes
             if (isYearView) {
                 const monthKey = session.date.slice(0, 7); 
                 if (!monthsBreakdown[monthKey]) {
@@ -404,11 +485,11 @@ export default function App() {
         };
     }, [sessions, userSettings.oceanRank, userSettings.exchangeGoalIndex, selectedMonth, userSettings.defaultPVI, isYearView]);
 
-    // --- HANDLERS ---
+    // --- HANDLERS (Firestore) ---
     
     const openAddModal = () => {
         setFormData({
-            id: null,
+            id: undefined,
             date: new Date().toISOString().split('T')[0],
             buyIn: 5,
             gamesCount: 0,
@@ -427,30 +508,56 @@ export default function App() {
         setIsSessionModalOpen(true);
     };
 
-    const handleSaveSession = (e: React.FormEvent) => {
+    const handleSaveSession = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (formData.id) {
-            const updatedSessions = sessions.map(s => s.id === formData.id ? formData : s);
-            setSessions(updatedSessions);
-        } else {
-            const newSessionWithId = { ...formData, id: Date.now() };
-            setSessions([newSessionWithId, ...sessions]);
+        if (!user) return;
+
+        try {
+            if (formData.id) {
+                // UPDATE (Firestore)
+                const sessionRef = doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', formData.id);
+                await updateDoc(sessionRef, { ...formData });
+            } else {
+                // CREATE (Firestore)
+                await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), {
+                    ...formData
+                });
+            }
+            setIsSessionModalOpen(false);
+        } catch (error) {
+            console.error("Error saving session:", error);
+            alert("Error al guardar en la nube. Intenta de nuevo.");
         }
-        setIsSessionModalOpen(false);
     };
 
-    const initiateDelete = (id: number | null) => {
+    const initiateDelete = (id: string | null) => {
         setSessionToDelete(id);
         setIsDeleteModalOpen(true);
     };
 
-    const confirmDelete = () => {
-        if (sessionToDelete) {
-            setSessions(sessions.filter(s => s.id !== sessionToDelete));
-            setSessionToDelete(null);
-            setIsDeleteModalOpen(false);
+    const confirmDelete = async () => {
+        if (sessionToDelete && user) {
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', sessionToDelete));
+                setSessionToDelete(null);
+                setIsDeleteModalOpen(false);
+            } catch (error) {
+                console.error("Error deleting session:", error);
+            }
         }
     };
+
+    const saveSettings = async () => {
+        if (!user) return;
+        try {
+            await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global'), userSettings, { merge: true });
+            setIsSettingsModalOpen(false);
+        } catch (error) {
+            console.error("Error saving settings:", error);
+        }
+    };
+
+    // --- FORMATTERS ---
 
     const formatCurrency = (val: number | string) => {
         const num = typeof val === 'string' ? parseFloat(val) : val;
@@ -471,6 +578,18 @@ export default function App() {
         const date = new Date(parseInt(y), parseInt(m) - 1);
         return date.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
     };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-sans">
+                <StyleInjector />
+                <div className="flex flex-col items-center gap-3">
+                    <Loader2 size={32} className="animate-spin text-cyan-500" />
+                    <p className="text-sm">Sincronizando con la nube...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen font-sans text-slate-200 selection:bg-cyan-500 selection:text-white">
@@ -754,7 +873,7 @@ export default function App() {
                                                             <Pencil size={16} />
                                                         </button>
                                                         <button 
-                                                            onClick={() => initiateDelete(session.id)}
+                                                            onClick={() => initiateDelete(session.id!)}
                                                             className="text-slate-500 hover:text-red-400 transition-colors p-2 hover:bg-slate-700 rounded-lg"
                                                             title="Borrar Sesión"
                                                         >
@@ -868,7 +987,7 @@ export default function App() {
                                         setManualTPInput(''); 
                                     }}
                                     className={`w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 pl-9 text-white focus:ring-2 focus:ring-cyan-500 outline-none font-mono font-bold ${
-                                      (typeof formData.pvi === 'string' ? parseFloat(formData.pvi) : formData.pvi) < 1 ? 'text-red-400' : 'text-emerald-400'
+                                      (typeof formData.pvi === 'string' ? parseFloat(formData.pvi) : formData.pvi || 0.5) < 1 ? 'text-red-400' : 'text-emerald-400'
                                     }`}
                                 />
                             </div>
@@ -1038,7 +1157,7 @@ export default function App() {
                     </div>
 
                     <button 
-                        onClick={() => setIsSettingsModalOpen(false)}
+                        onClick={saveSettings}
                         className="w-full bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-4 rounded-xl transition-colors"
                     >
                         Guardar Cambios
