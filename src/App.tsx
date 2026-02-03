@@ -25,8 +25,8 @@ import {
   HardDrive,
   LogOut,
   User as UserIcon,
-  ShieldCheck, // Re-agregado
-  ShieldAlert  // Re-agregado
+  ShieldCheck,
+  ShieldAlert
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -456,19 +456,38 @@ function App() {
         return { filteredSessions, monthsBreakdown: Object.values(monthsBreakdown).sort((a, b) => b.date.localeCompare(a.date)), totalGames, totalRakeGross, totalRakePVI, totalTidePoints, totalOceanGemsValue, totalGemsCount, totalMining, totalLeaderboard, miningRBPercent, leaderboardRBPercent, oceanRBPercent, totalRakebackUSD, effectiveRBPercent, currentRank, avgPVI, targetGoal, gemExchangeRate, stakesBreakdown, selectedYear };
     }, [sessions, userSettings.oceanRank, userSettings.exchangeGoalIndex, selectedMonth, userSettings.defaultPVI, isYearView]);
 
-    // Formatters
+    // Handlers
+    const openAddModal = () => { setFormData({ id: undefined, date: new Date().toISOString().split('T')[0], buyIn: 5, gamesCount: 0, pvi: userSettings.defaultPVI || 0.5, leaderboardPrize: 0, miningPrize: 0, notes: '' }); setManualTPInput(''); setIsSessionModalOpen(true); };
+    const openEditModal = (session: Session) => { setFormData({ ...session }); setManualTPInput(''); setIsSessionModalOpen(true); };
+    const handleSaveSession = async (e: React.FormEvent) => { 
+        e.preventDefault(); 
+        const { id, ...dataToSave } = formData;
+        
+        if (isFirebaseAvailable && user && !user.isAnonymous) { 
+            try { 
+                if (id) { 
+                    await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', id), dataToSave); 
+                } else { 
+                    await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), dataToSave); 
+                } 
+            } catch (e: any) { alert("Error nube: " + e.message); } 
+        } else { 
+            if (id) { 
+                setSessions(sessions.map(s => s.id === id ? { ...dataToSave, id } as Session : s)); 
+            } else { 
+                setSessions([{ ...dataToSave, id: Date.now().toString() } as Session, ...sessions]); 
+            } 
+        } 
+        setIsSessionModalOpen(false); 
+    };
+    const initiateDelete = (id: string | null) => { setSessionToDelete(id); setIsDeleteModalOpen(true); };
+    const confirmDelete = async () => { if (sessionToDelete) { if (isFirebaseAvailable && user && !user.isAnonymous) { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', sessionToDelete)); } else { setSessions(sessions.filter(s => s.id !== sessionToDelete)); } setSessionToDelete(null); setIsDeleteModalOpen(false); } };
+    const saveSettings = async () => { if (isFirebaseAvailable && user && !user.isAnonymous) { await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global'), userSettings, { merge: true }); } setIsSettingsModalOpen(false); };
+
     const formatCurrency = (val: number | string) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(typeof val === 'string' ? parseFloat(val) : val || 0);
     const formatNumber = (val: number | string) => new Intl.NumberFormat('en-US').format(typeof val === 'string' ? parseFloat(val) : val || 0);
     const formatPercent = (val: number) => `${(val || 0).toFixed(1)}%`;
     const formatMonth = (dateStr: string) => { const [y, m] = dateStr.split('-'); return new Date(parseInt(y), parseInt(m) - 1).toLocaleString('es-ES', { month: 'long', year: 'numeric' }); };
-
-    // Handlers
-    const openAddModal = () => { setFormData({ id: undefined, date: new Date().toISOString().split('T')[0], buyIn: 5, gamesCount: 0, pvi: userSettings.defaultPVI || 0.5, leaderboardPrize: 0, miningPrize: 0, notes: '' }); setManualTPInput(''); setIsSessionModalOpen(true); };
-    const openEditModal = (session: Session) => { setFormData({ ...session }); setManualTPInput(''); setIsSessionModalOpen(true); };
-    const handleSaveSession = async (e: React.FormEvent) => { e.preventDefault(); if (isFirebaseAvailable && user && !user.isAnonymous) { try { if (formData.id) { await updateDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', formData.id), { ...formData }); } else { await addDoc(collection(db, 'artifacts', appId, 'users', user.uid, 'sessions'), { ...formData }); } } catch (e: any) { alert("Error nube: " + e.message); } } else { if (formData.id) { setSessions(sessions.map(s => s.id === formData.id ? { ...formData, id: formData.id } as Session : s)); } else { setSessions([{ ...formData, id: Date.now().toString() } as Session, ...sessions]); } } setIsSessionModalOpen(false); };
-    const initiateDelete = (id: string | null) => { setSessionToDelete(id); setIsDeleteModalOpen(true); };
-    const confirmDelete = async () => { if (sessionToDelete) { if (isFirebaseAvailable && user && !user.isAnonymous) { await deleteDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'sessions', sessionToDelete)); } else { setSessions(sessions.filter(s => s.id !== sessionToDelete)); } setSessionToDelete(null); setIsDeleteModalOpen(false); } };
-    const saveSettings = async () => { if (isFirebaseAvailable && user && !user.isAnonymous) { await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'global'), userSettings, { merge: true }); } setIsSettingsModalOpen(false); };
 
     if (!authInitialized) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 font-sans"><StyleInjector /><Loader2 size={32} className="animate-spin text-cyan-500" /></div>;
     if (!user) return <React.Fragment><StyleInjector /><LoginPage onLogin={handleLoginAction} isCloudAvailable={isFirebaseAvailable} /></React.Fragment>;
@@ -629,6 +648,7 @@ function App() {
                                 )}
                                 <span>{isFirebaseAvailable && !user.isAnonymous ? 'Datos sincronizados y seguros.' : 'Datos locales (Riesgo de pérdida).'}</span>
                             </div>
+                            <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 self-start mt-2"><LogOut size={12} /> Cerrar Sesión / Cambiar Cuenta</button>
                         </div>
                     )}
                     <div><label className="block text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><Settings size={18} className="text-cyan-400" /> Estatus Ocean Actual</label><div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">{OCEAN_LEVELS.map(level => (<button key={level.id} onClick={() => setUserSettings({...userSettings, oceanRank: level.id})} className={`p-3 rounded-lg border text-left transition-all relative overflow-hidden group ${userSettings.oceanRank === level.id ? 'bg-slate-800 border-emerald-400 ring-1 ring-emerald-400' : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-600 hover:bg-slate-800'}`}><div className="relative z-10"><div className="font-bold text-sm">{level.name}</div><div className="flex items-center gap-2 mt-1"><span className="text-xs bg-slate-950/50 px-1.5 py-0.5 rounded text-cyan-300 font-mono">x{level.multiplier}</span><span className="text-[10px] opacity-70">~{level.labelPercent}%</span></div></div>{userSettings.oceanRank === level.id && (<div className={`absolute right-0 top-0 w-16 h-full bg-gradient-to-l from-current opacity-10 ${level.color}`}></div>)}</button>))}</div></div>
