@@ -24,7 +24,8 @@ import {
   Database,   
   HardDrive,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  LogIn
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -475,31 +476,25 @@ function App() {
         <div className="min-h-screen font-sans text-slate-200 selection:bg-cyan-500 selection:text-white">
             <StyleInjector />
             <nav className="bg-slate-900 border-b border-slate-800 sticky top-0 z-30 shadow-2xl">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex items-center justify-between h-16">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-2 rounded-xl shadow-lg shadow-amber-500/20">
-                                <Anchor className="text-slate-900" size={20} strokeWidth={2.5} />
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+                    <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-2 rounded-xl shadow-lg shadow-amber-500/20"><Anchor className="text-slate-900" size={20} strokeWidth={2.5} /></div>
+                                <div className="flex flex-col"><span className="text-lg font-bold tracking-tight text-white leading-tight">SpinTracker <span className="text-cyan-400">Ocean</span></span><span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Rakeback Manager</span></div>
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-lg font-bold tracking-tight text-white leading-tight">SpinTracker <span className="text-cyan-400">Ocean</span></span>
-                                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Rakeback Manager</span>
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setIsYearView(!isYearView)} className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg border transition-all ${isYearView ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}`} title={isYearView ? "Volver a vista mensual" : "Ver Total Anual"}><CalendarRange size={16} /><span className="hidden sm:inline">Año</span></button>
+                                {user && !user.isAnonymous && <button onClick={handleLogout} className="p-2 rounded-lg bg-slate-800 text-red-400 border border-slate-700 hover:bg-slate-700 hover:text-red-300 transition-colors" title="Cerrar Sesión"><LogOut size={16} /></button>}
                             </div>
                         </div>
                         <div className="flex items-center gap-3">
-                            <button onClick={() => setIsYearView(!isYearView)} className={`flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-lg border transition-all ${isYearView ? 'bg-amber-500/20 text-amber-400 border-amber-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'}`}>
-                                <CalendarRange size={14} /><span className="hidden sm:inline">Año Total</span>
-                            </button>
-                            <div className="relative group hidden sm:block">
+                            <div className="relative group flex-1">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Calendar size={14} className="text-slate-400" /></div>
-                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg pl-9 pr-8 py-2 focus:ring-2 focus:ring-cyan-500 outline-none appearance-none capitalize cursor-pointer hover:bg-slate-700 transition-colors">
-                                    {availableMonths.map(m => (<option key={m} value={m}>{formatMonth(m)}</option>))}
-                                </select>
+                                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg pl-9 pr-4 py-2.5 focus:ring-2 focus:ring-cyan-500 outline-none appearance-none capitalize cursor-pointer hover:bg-slate-700 transition-colors">{availableMonths.map(m => (<option key={m} value={m}>{formatMonth(m)}</option>))}</select>
                             </div>
-                            <button onClick={() => setIsSettingsModalOpen(true)} className="flex items-center gap-2 text-sm bg-slate-800 hover:bg-slate-700 px-3 py-2 rounded-lg border border-slate-700 transition-all hover:border-slate-600 group">
-                                <div className={`w-2 h-2 rounded-full ${stats.currentRank.bg} shadow-[0_0_8px_currentColor]`}></div>
-                                <span className="font-medium text-slate-200 group-hover:text-white transition-colors">{stats.currentRank.name}</span>
-                                <Settings size={14} className="text-slate-400 group-hover:rotate-90 transition-transform duration-500" />
+                            <button onClick={() => setIsSettingsModalOpen(true)} className="flex items-center gap-2 text-sm bg-slate-800 hover:bg-slate-700 px-4 py-2.5 rounded-lg border border-slate-700 transition-all hover:border-slate-600 group shrink-0">
+                                <div className={`w-2 h-2 rounded-full ${stats.currentRank.bg} shadow-[0_0_8px_currentColor]`}></div><span className="font-medium text-slate-200 group-hover:text-white transition-colors">{stats.currentRank.name}</span><Settings size={14} className="text-slate-400 group-hover:rotate-90 transition-transform duration-500 ml-1" />
                             </button>
                         </div>
                     </div>
@@ -625,7 +620,14 @@ function App() {
                     {user && (
                         <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 flex flex-col gap-3">
                             <div className="flex items-center justify-between"><div className="flex items-center gap-2"><UserIcon size={18} className="text-indigo-400" /><span className="text-sm font-medium text-white">{user.isAnonymous ? 'Invitado' : user.email}</span></div><div className="text-xs px-2 py-1 rounded bg-slate-900 border border-slate-700">{isFirebaseAvailable && !user.isAnonymous ? 'Nube' : 'Local'}</div></div>
-                            <button onClick={handleLogout} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 self-start"><LogOut size={12} /> Cerrar Sesión / Cambiar Cuenta</button>
+                            <div className="flex items-center gap-2 text-xs text-slate-400 border-t border-slate-700 pt-3">
+                                {isFirebaseAvailable && !user.isAnonymous ? (
+                                    <ShieldCheck size={14} className="text-emerald-500" />
+                                ) : (
+                                    <ShieldAlert size={14} className="text-amber-500" />
+                                )}
+                                <span>{isFirebaseAvailable && !user.isAnonymous ? 'Datos sincronizados y seguros.' : 'Datos locales (Riesgo de pérdida).'}</span>
+                            </div>
                         </div>
                     )}
                     <div><label className="block text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><Settings size={18} className="text-cyan-400" /> Estatus Ocean Actual</label><div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2 custom-scrollbar">{OCEAN_LEVELS.map(level => (<button key={level.id} onClick={() => setUserSettings({...userSettings, oceanRank: level.id})} className={`p-3 rounded-lg border text-left transition-all relative overflow-hidden group ${userSettings.oceanRank === level.id ? 'bg-slate-800 border-emerald-400 ring-1 ring-emerald-400' : 'border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-600 hover:bg-slate-800'}`}><div className="relative z-10"><div className="font-bold text-sm">{level.name}</div><div className="flex items-center gap-2 mt-1"><span className="text-xs bg-slate-950/50 px-1.5 py-0.5 rounded text-cyan-300 font-mono">x{level.multiplier}</span><span className="text-[10px] opacity-70">~{level.labelPercent}%</span></div></div>{userSettings.oceanRank === level.id && (<div className={`absolute right-0 top-0 w-16 h-full bg-gradient-to-l from-current opacity-10 ${level.color}`}></div>)}</button>))}</div></div>
