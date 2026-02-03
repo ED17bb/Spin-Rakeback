@@ -24,9 +24,7 @@ import {
   Database,   
   HardDrive,
   LogOut,
-  User as UserIcon,
-  ShieldCheck,
-  ShieldAlert
+  User as UserIcon
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
