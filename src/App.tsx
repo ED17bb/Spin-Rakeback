@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
+  Anchor, 
   Settings, 
   X, 
   Coins, 
@@ -25,8 +26,7 @@ import {
   LogOut,
   User as UserIcon,
   ShieldCheck,
-  ShieldAlert,
-  LogIn
+  ShieldAlert
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
