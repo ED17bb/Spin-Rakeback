@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Anchor, 
   Settings, 
   X, 
   Coins, 
@@ -110,12 +109,12 @@ interface StakeData {
 // --- FIREBASE CONFIGURATION ---
 const YOUR_FIREBASE_CONFIG = {
     apiKey: "AIzaSyA_moODg4OQhTHedzQ4_vJAVeZbhVFCCto",
-  authDomain: "spin-rakeback-tracker.firebaseapp.com",
-  projectId: "spin-rakeback-tracker",
-  storageBucket: "spin-rakeback-tracker.firebasestorage.app",
-  messagingSenderId: "193768744384",
-  appId: "1:193768744384:web:4745748844d8d9117a5425"
-};
+    authDomain: "spin-rakeback-tracker.firebaseapp.com",
+    projectId: "spin-rakeback-tracker",
+    storageBucket: "spin-rakeback-tracker.firebasestorage.app",
+    messagingSenderId: "193768744384",
+    appId: "1:193768744384:web:4745748844d8d9117a5425"
+  };
 
 // --- FIREBASE INITIALIZATION ---
 let auth: any = null;
