@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Anchor, 
   Settings, 
   X, 
   Coins, 
@@ -26,7 +25,8 @@ import {
   LogOut,
   User as UserIcon,
   ShieldCheck,
-  ShieldAlert
+  ShieldAlert,
+  LogIn
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -110,12 +110,12 @@ interface StakeData {
 // --- FIREBASE CONFIGURATION ---
 const YOUR_FIREBASE_CONFIG = {
     apiKey: "AIzaSyA_moODg4OQhTHedzQ4_vJAVeZbhVFCCto",
-    authDomain: "spin-rakeback-tracker.firebaseapp.com",
-    projectId: "spin-rakeback-tracker",
-    storageBucket: "spin-rakeback-tracker.firebasestorage.app",
-    messagingSenderId: "193768744384",
-    appId: "1:193768744384:web:4745748844d8d9117a5425"
-  };
+  authDomain: "spin-rakeback-tracker.firebaseapp.com",
+  projectId: "spin-rakeback-tracker",
+  storageBucket: "spin-rakeback-tracker.firebasestorage.app",
+  messagingSenderId: "193768744384",
+  appId: "1:193768744384:web:4745748844d8d9117a5425"
+};
 
 // --- FIREBASE INITIALIZATION ---
 let auth: any = null;
@@ -257,9 +257,14 @@ const LoginPage: React.FC<{ onLogin: (type: 'google' | 'guest') => void, isCloud
         <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 font-sans text-slate-200">
             <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
                 <div className="flex flex-col items-center mb-10 text-center">
-                    <div className="bg-gradient-to-br from-cyan-500 to-blue-600 p-4 rounded-2xl shadow-lg shadow-cyan-500/20 mb-6">
-                        <Anchor className="text-slate-900" size={48} strokeWidth={2.5} />
-                    </div>
+                    
+                    {/* LOGO LOGIN */}
+                    <img 
+                        src="/logo.jpeg" 
+                        alt="SpinTracker Logo" 
+                        className="w-24 h-24 rounded-2xl shadow-lg shadow-cyan-500/20 mb-6 object-cover" 
+                    />
+
                     <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">SpinTracker <span className="text-cyan-400">Ocean</span></h1>
                     <p className="text-slate-400 text-sm">Gestiona tu rakeback, controla tu PVI y maximiza tus ganancias.</p>
                 </div>
@@ -500,7 +505,8 @@ function App() {
                     <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-2 rounded-xl shadow-lg shadow-amber-500/20"><Anchor className="text-slate-900" size={20} strokeWidth={2.5} /></div>
+                                {/* LOGO NAVBAR */}
+                                <img src="/logo.jpeg" alt="Logo" className="w-10 h-10 rounded-xl shadow-lg shadow-amber-500/20 object-cover" />
                                 <div className="flex flex-col"><span className="text-lg font-bold tracking-tight text-white leading-tight">SpinTracker <span className="text-cyan-400">Ocean</span></span><span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Rakeback Manager</span></div>
                             </div>
                             <div className="flex items-center gap-2">
